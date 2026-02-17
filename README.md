@@ -1,335 +1,548 @@
-# Ambiente di Sviluppo WildFly - Guida per Sviluppatori Frontend
+# Guida alla Customizzazione dell'Ambiente Docker/Podman
 
-Questo documento contiene tutte le istruzioni necessarie per avviare e gestire l'ambiente di sviluppo con WildFly 23.0.2 e Java 11.
+Questa guida spiega come personalizzare questa configurazione Docker/Podman per altri progetti WildFly/JBoss.
 
-## Requisiti
+## Indice
 
-### Opzione 1: Docker Desktop su Windows (Consigliato)
-- **Windows 10 Pro/Enterprise o Windows 11**
-- **RAM**: almeno 4GB disponibili
-- **Spazio disco**: almeno 5GB
-
-### Opzione 2: WSL2 + Docker su Windows
-- **Windows 10 build 19041+ o Windows 11**
-- **RAM**: almeno 4GB disponibili
-- **Spazio disco**: almeno 10GB (WSL2 + Docker + immagini)
+1. [Panoramica della Struttura](#panoramica-della-struttura)
+2. [Personalizzare per un Nuovo Progetto](#personalizzare-per-un-nuovo-progetto)
+3. [Modificare Versioni e Configurazioni](#modificare-versioni-e-configurazioni)
+4. [Aggiungere Moduli e Librerie Custom](#aggiungere-moduli-e-librerie-custom)
+5. [Configurare Multiple Istanze](#configurare-multiple-istanze)
+6. [Best Practices](#best-practices)
 
 ---
 
-## Installazione
+## Panoramica della Struttura
 
-### Se hai già Docker Desktop installato
-
-Salta direttamente a [Avviare l'Ambiente](#avviare-lambiente).
-
-### Installazione di WSL2 + Docker
-
-Se non hai Docker Desktop o preferisci usare WSL2, segui questi passi:
-
-#### Step 1: Installare WSL2
-
-1. Apri **PowerShell come Amministratore**
-2. Esegui:
-   ```powershell
-   wsl --install
-   ```
-   Questo installerà WSL2 e Ubuntu di default.
-
-3. **Riavvia il computer** quando richiesto
-
-4. Dopo il riavvio, apri **Windows Terminal** e seleziona **Ubuntu**
-
-5. Imposta una password per l'utente Ubuntu quando richiesto
-
-#### Step 2: Aggiornare WSL2
-
-Nel terminale Ubuntu, esegui:
-```bash
-sudo apt update && sudo apt upgrade -y
+```
+docker-configuration/
+├── Dockerfile                      # Definizione immagine Docker
+├── docker-compose.yml              # Orchestrazione container
+├── README.md                       # Guida utente per sviluppatori
+├── CUSTOMIZATION_GUIDE.md         # Questa guida
+├── config/
+│   ├── standalone.xml             # Configurazione WildFly
+│   └── config.properties          # Configurazioni applicazione
+├── custom-libs/
+│   ├── passi.jar                  # Librerie custom
+│   └── module.xml                 # Definizione modulo WildFly
+├── truststore/
+│   └── truststore.jks             # Certificati SSL
+└── ear/
+    └── IscrizioneAziendaPubblicaWeb.ear  # Applicazione da deployare
 ```
 
-#### Step 3: Installare Docker in WSL2
+### Funzione di ogni componente:
 
-Nel terminale Ubuntu, esegui:
-```bash
-sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
-sudo apt update
-sudo apt install -y docker-ce docker-ce-cli containerd.io
-```
-
-#### Step 4: Configurare Docker (opzionale, per evitare `sudo`)
-
-```bash
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-#### Step 5: Installare Docker Compose
-
-```bash
-sudo apt install -y docker-compose
-```
-
-#### Step 6: Avviare il servizio Docker
-
-```bash
-sudo service docker start
-```
-
-**Verifica che tutto sia installato:**
-```bash
-docker --version
-docker-compose --version
-```
+- **Dockerfile**: costruisce l'immagine con WildFly, Java, e tutte le dipendenze
+- **docker-compose.yml**: configura network, porte, nomi container
+- **config/standalone.xml**: configurazione server WildFly (datasources, porte, security)
+- **config/config.properties**: configurazioni specifiche dell'applicazione
+- **custom-libs/**: moduli Java custom da caricare in WildFly
+- **truststore/**: certificati SSL per connessioni HTTPS
+- **ear/**: file EAR dell'applicazione da deployare automaticamente
 
 ---
 
-## Avviare l'Ambiente
+## Personalizzare per un Nuovo Progetto
 
-### 1. Navigare alla directory del progetto
-
-**Su Windows (CMD o PowerShell):**
-```cmd
-wsl
-cd /home/masanson/projects/WA03631-IscrizioneAziendaPubblicaWeb/docker-configuration
-```
-
-**O direttamente in WSL/Linux:**
-```bash
-cd /home/masanson/projects/WA03631-IscrizioneAziendaPubblicaWeb/docker-configuration
-```
-
-### 2. Avviare i container
+### Step 1: Copiare la struttura
 
 ```bash
-docker-compose up -d
+# Copia l'intera cartella docker-configuration
+cp -r docker-configuration ../MIO_NUOVO_PROGETTO/docker-configuration
+cd ../MIO_NUOVO_PROGETTO/docker-configuration
 ```
 
-Questo comando:
-- Costruisce l'immagine Docker (se non esiste)
-- Avvia il container in background
-- Espone le porte 8080 (applicazione) e 9990 (console admin)
-
-### 3. Verificare che il container sia in esecuzione
+### Step 2: Sostituire il file EAR
 
 ```bash
-docker-compose ps
+# Rimuovi il vecchio EAR
+rm ear/IscrizioneAziendaPubblicaWeb.ear
+
+# Copia il tuo EAR
+cp /path/to/MioProgetto.ear ear/
+
+# Aggiorna il Dockerfile (riga 39)
+# DA:  COPY ./ear/IscrizioneAziendaPubblicaWeb.ear ${WILDFLY_HOME}/standalone/deployments/
+# A:   COPY ./ear/MioProgetto.ear ${WILDFLY_HOME}/standalone/deployments/
 ```
 
-Dovresti vedere:
-```
-NAME        COMMAND                 STATUS
-wildfly-dev "/__cacert_entrypoin…"  Up X seconds
-```
+### Step 3: Aggiornare config.properties
 
-### 4. Visualizzare i log
+Modifica `config/config.properties` con le configurazioni del tuo progetto:
 
-```bash
-docker-compose logs -f
-```
-
-Aspetta finché non vedi:
-```
-WFLYSRV0025: WildFly Full 23.0.2.Final started
+```properties
+# Esempio configurazioni
+database.url=jdbc:postgresql://db-server:5432/miodb
+database.user=mio_user
+api.endpoint=https://api.example.com
 ```
 
-Premi `Ctrl+C` per uscire dai log.
+Se il tuo progetto **non usa** config.properties, rimuovi dal Dockerfile:
 
-### 5. Accedere all'applicazione
+```dockerfile
+# RIMUOVI questa riga (riga 26)
+# COPY ./config/config.properties ${WILDFLY_HOME}/modules/IscrizioneAziendaPubblicaWeb/
+```
 
-- **Applicazione**: http://localhost:8080
-- **Console Amministrazione WildFly**: http://localhost:9990
+E rimuovi anche la creazione della directory (riga 21):
+
+```dockerfile
+# RIMUOVI o modifica con il nome del tuo modulo
+# mkdir -p ${WILDFLY_HOME}/modules/IscrizioneAziendaPubblicaWeb
+```
+
+### Step 4: Personalizzare nomi container e network
+
+Modifica `docker-compose.yml`:
+
+```yaml
+services:
+  wildfly:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mio-progetto-dev  # CAMBIA QUESTO
+    ports:
+      - "8080:8080"
+      - "9990:9990"
+    networks:
+      - mio-progetto-network  # CAMBIA QUESTO
+
+networks:
+  mio-progetto-network:  # CAMBIA QUESTO
+    driver: bridge
+```
+
+### Step 5: Aggiornare il README.md
+
+Modifica il README.md per riflettere il nome del tuo progetto:
+
+- Sostituisci tutti i riferimenti a `IscrizioneAziendaPubblicaWeb` con il tuo progetto
+- Sostituisci `wildfly-dev` con il nome del tuo container
+- Aggiorna i path specifici del progetto
 
 ---
 
-## Fermare l'Ambiente
+## Modificare Versioni e Configurazioni
 
-### Fermare il container (mantenendo i dati)
+### Cambiare versione di Java
 
-```bash
-docker-compose stop
+Modifica il `Dockerfile` (riga 2):
+
+```dockerfile
+# Per Java 17
+FROM eclipse-temurin:17-jdk
+
+# Per Java 11 (default)
+FROM eclipse-temurin:11-jdk
+
+# Per Java 8
+FROM eclipse-temurin:8-jdk
 ```
 
-### Fermare e rimuovere il container
+### Cambiare versione di WildFly
 
-```bash
-docker-compose down
+Modifica il `Dockerfile` (righe 8-9 e 14):
+
+```dockerfile
+# Aggiorna la versione
+ENV WILDFLY_VERSION=26.1.3.Final \
+    WILDFLY_HOME=/opt/wildfly \
+    JBOSS_HOME=/opt/wildfly
+
+# Aggiorna l'URL di download (riga 14)
+RUN cd /tmp && \
+    wget -q https://download.jboss.org/wildfly/26.1.3.Final/wildfly-26.1.3.Final.tar.gz && \
+    tar -xzf wildfly-26.1.3.Final.tar.gz -C /opt && \
+    mv /opt/wildfly-26.1.3.Final ${WILDFLY_HOME} && \
+    rm wildfly-26.1.3.Final.tar.gz
 ```
 
-### Fermare e rimuovere tutto (inclusi volumi)
+**Trova le versioni disponibili**: https://www.wildfly.org/downloads/
 
-```bash
-docker-compose down -v
-```
+### Modificare le porte
 
----
+#### Opzione 1: Cambiare porta esterna (consigliato per evitare conflitti)
 
-## Aggiornare il File EAR
+Modifica solo `docker-compose.yml`:
 
-Se aggiorni il file dell'applicazione (`ear/IscrizioneAziendaPubblicaWeb.ear`):
-
-### Metodo 1: Ricostruire l'immagine (Consigliato)
-
-```bash
-# Ferma il container
-docker-compose down
-
-# Ricostruisci l'immagine con il nuovo EAR
-docker-compose build --no-cache
-
-# Avvia il nuovo container
-docker-compose up -d
-```
-
-### Metodo 2: Aggiornamento veloce (senza ricostruire)
-
-Se vuoi aggiornare solo l'EAR senza ricostruire l'intera immagine:
-
-```bash
-# Copia il nuovo EAR nella cartella deployments del container
-docker cp ./ear/IscrizioneAziendaPubblicaWeb.ear wildfly-dev:/opt/wildfly/standalone/deployments/
-
-# WildFly ricaricherà automaticamente l'applicazione (attendi 30 secondi)
-```
-
-**Verifica il deploy:**
-```bash
-docker-compose logs -f | grep -E "(deployment|ERROR)"
-```
-
----
-
-## Aggiornare il File di Configurazione (config.properties)
-
-Se modifichi il file `config/config.properties`:
-
-### Metodo 1: Ricostruire l'immagine (Consigliato)
-
-```bash
-# Ferma il container
-docker-compose down
-
-# Ricostruisci l'immagine
-docker-compose build --no-cache
-
-# Avvia il nuovo container
-docker-compose up -d
-```
-
-### Metodo 2: Aggiornamento veloce (senza ricostruire)
-
-Se vuoi aggiornare solo il config.properties:
-
-```bash
-# Copia il nuovo file nel container
-docker cp ./config/config.properties wildfly-dev:/opt/wildfly/modules/IscrizioneAziendaPubblicaWeb/
-
-# Riavvia l'applicazione (facoltativo, a seconda di come l'app carica il file)
-docker-compose restart
-```
-
----
-
-## Comandi Utili
-
-### Visualizzare i log in tempo reale
-```bash
-docker-compose logs -f
-```
-
-### Visualizzare i log con filtro
-```bash
-docker-compose logs -f | grep -E "ERROR|Exception"
-```
-
-### Entrare nel container (shell interattiva)
-```bash
-docker-compose exec wildfly bash
-```
-
-### Verificare le cartelle nel container
-```bash
-docker exec wildfly-dev ls -la /opt/wildfly/modules/IscrizioneAziendaPubblicaWeb/
-docker exec wildfly-dev ls -la /opt/wildfly/standalone/deployments/
-```
-
-### Visualizzare il file config.properties nel container
-```bash
-docker exec wildfly-dev cat /opt/wildfly/modules/IscrizioneAziendaPubblicaWeb/config.properties
-```
-
-### Copiare un file dal container al computer locale
-```bash
-docker cp wildfly-dev:/opt/wildfly/standalone/log/server.log ./server.log
-```
-
-### Riavviare il container
-```bash
-docker-compose restart
-```
-
-### Rimuovere l'immagine (per liberare spazio)
-```bash
-docker rmi podman-configuration-wildfly
-```
-
----
-
-## Troubleshooting
-
-### Errore: "Port 8080 is already in use"
-
-La porta 8080 è già occupata da un altro processo.
-
-**Soluzione 1:** Ferma il container precedente
-```bash
-docker-compose down
-```
-
-**Soluzione 2:** Usa una porta diversa modificando `docker-compose.yml`
 ```yaml
 ports:
-  - "8081:8080"  # Cambia la porta da 8080 a 8081
-  - "9990:9990"
+  - "8081:8080"  # Porta esterna:Porta interna
+  - "9991:9990"
 ```
 
-Poi accedi con: http://localhost:8081
+Accedi con: http://localhost:8081
 
-### Errore: "Docker daemon is not running"
+#### Opzione 2: Cambiare porta interna WildFly
 
-Il servizio Docker non è avviato.
+Modifica `config/standalone.xml` (cerca socket-binding-group):
 
-**Soluzione:**
-```bash
-# Su WSL2/Linux
-sudo service docker start
-
-# Su Docker Desktop
-Apri Docker Desktop
+```xml
+<socket-binding name="http" port="${jboss.http.port:8090}"/>
 ```
 
-### Container non si avvia
+E aggiorna anche `docker-compose.yml`:
 
-```bash
-# Verifica i log di errore
-docker-compose logs
-
-# Se l'immagine è corrotta, ricostruiscila
-docker-compose build --no-cache
-docker-compose up -d
+```yaml
+ports:
+  - "8090:8090"  # Deve corrispondere
 ```
 
-### File config.properties non viene caricato
+### Aggiungere variabili d'ambiente
 
-Assicurati che il file esista nel container:
-```bash
-docker exec wildfly-dev ls -la /opt/wildfly/modules/IscrizioneAziendaPubblicaWeb/
+Modifica `docker-compose.yml`:
+
+```yaml
+services:
+  wildfly:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: wildfly-dev
+    environment:
+      - JAVA_OPTS=-Xms512m -Xmx2048m
+      - DB_HOST=postgres-server
+      - DB_PORT=5432
+      - ENV=development
+    ports:
+      - "8080:8080"
+      - "9990:9990"
 ```
 
-Se il file non è presente, ricostruisci l'immagine:
+---
+
+## Aggiungere Moduli e Librerie Custom
+
+### Aggiungere una nuova libreria JAR
+
+1. **Copia il file JAR** in `custom-libs/`:
+
 ```bash
+cp /path/to/mia-libreria.jar custom-libs/
+```
+
+2. **Crea un file module.xml** in `custom-libs/`:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<module xmlns="urn:jboss:module:1.9" name="com.miomodulo.main">
+    <resources>
+        <resource-root path="mia-libreria.jar"/>
+    </resources>
+    <dependencies>
+        <module name="javax.api"/>
+    </dependencies>
+</module>
+```
+
+3. **Aggiorna il Dockerfile** per copiare i file:
+
+```dockerfile
+# Aggiungi dopo le altre COPY
+COPY ./custom-libs/mia-libreria.jar ${WILDFLY_HOME}/modules/com/miomodulo/main/
+COPY ./custom-libs/module.xml ${WILDFLY_HOME}/modules/com/miomodulo/main/
+```
+
+### Aggiungere un driver JDBC
+
+Esempio con PostgreSQL:
+
+1. **Scarica il driver JDBC** e mettilo in `custom-libs/`:
+
+```bash
+wget https://jdbc.postgresql.org/download/postgresql-42.5.0.jar -O custom-libs/postgresql.jar
+```
+
+2. **Crea module.xml** per il driver:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<module xmlns="urn:jboss:module:1.9" name="org.postgresql">
+    <resources>
+        <resource-root path="postgresql.jar"/>
+    </resources>
+    <dependencies>
+        <module name="javax.api"/>
+        <module name="javax.transaction.api"/>
+    </dependencies>
+</module>
+```
+
+3. **Aggiorna Dockerfile**:
+
+```dockerfile
+RUN mkdir -p ${WILDFLY_HOME}/modules/org/postgresql/main
+COPY ./custom-libs/postgresql.jar ${WILDFLY_HOME}/modules/org/postgresql/main/
+COPY ./custom-libs/postgresql-module.xml ${WILDFLY_HOME}/modules/org/postgresql/main/module.xml
+```
+
+4. **Configura datasource in standalone.xml**:
+
+```xml
+<datasources>
+    <datasource jndi-name="java:/PostgresDS" pool-name="PostgresDS">
+        <connection-url>jdbc:postgresql://db-server:5432/mydb</connection-url>
+        <driver>postgresql</driver>
+        <security>
+            <user-name>postgres</user-name>
+            <password>password</password>
+        </security>
+    </datasource>
+    <drivers>
+        <driver name="postgresql" module="org.postgresql">
+            <driver-class>org.postgresql.Driver</driver-class>
+        </driver>
+    </drivers>
+</datasources>
+```
+
+---
+
+## Configurare Multiple Istanze
+
+Se devi eseguire più progetti contemporaneamente:
+
+### Opzione 1: Porte diverse
+
+**Progetto 1** - `docker-compose.yml`:
+```yaml
+services:
+  wildfly:
+    container_name: progetto1-dev
+    ports:
+      - "8080:8080"
+      - "9990:9990"
+    networks:
+      - progetto1-network
+
+networks:
+  progetto1-network:
+    driver: bridge
+```
+
+**Progetto 2** - `docker-compose.yml`:
+```yaml
+services:
+  wildfly:
+    container_name: progetto2-dev
+    ports:
+      - "8081:8080"  # Porta diversa
+      - "9991:9990"  # Porta diversa
+    networks:
+      - progetto2-network
+
+networks:
+  progetto2-network:
+    driver: bridge
+```
+
+### Opzione 2: File docker-compose multipli
+
+Crea `docker-compose.progetto1.yml` e `docker-compose.progetto2.yml`:
+
+```bash
+# Avvia progetto 1
+docker-compose -f docker-compose.progetto1.yml up -d
+
+# Avvia progetto 2
+docker-compose -f docker-compose.progetto2.yml up -d
+
+# Stop progetto 1
+docker-compose -f docker-compose.progetto1.yml down
+```
+
+---
+
+## Best Practices
+
+### 1. Usa .dockerignore
+
+Crea un file `.dockerignore` nella cartella `docker-configuration/`:
+
+```
+# .dockerignore
+README.md
+CUSTOMIZATION_GUIDE.md
+.git
+.gitignore
+*.log
+*.tmp
+```
+
+### 2. Versionamento delle immagini
+
+Nel `docker-compose.yml`, usa tag specifici:
+
+```yaml
+services:
+  wildfly:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mio-progetto-wildfly:1.0.0  # Aggiungi versione
+    container_name: mio-progetto-dev
+```
+
+Costruisci con:
+```bash
+docker-compose build
+docker tag mio-progetto-wildfly:latest mio-progetto-wildfly:1.0.0
+```
+
+### 3. Usa volumi per sviluppo rapido
+
+Per hot-reload durante sviluppo, aggiungi volumi in `docker-compose.yml`:
+
+```yaml
+services:
+  wildfly:
+    volumes:
+      - ./ear:/opt/wildfly/standalone/deployments:ro  # Read-only
+      - ./config/config.properties:/opt/wildfly/modules/IscrizioneAziendaPubblicaWeb/config.properties:ro
+```
+
+Così puoi aggiornare l'EAR o le configurazioni senza ricostruire l'immagine.
+
+### 4. Separare configurazioni per ambiente
+
+Crea file di properties diversi:
+
+```
+config/
+├── config.properties.dev
+├── config.properties.test
+└── config.properties.prod
+```
+
+Nel Dockerfile, usa ARG per scegliere:
+
+```dockerfile
+ARG ENV=dev
+COPY ./config/config.properties.${ENV} ${WILDFLY_HOME}/modules/App/config.properties
+```
+
+Build con:
+```bash
+docker-compose build --build-arg ENV=test
+```
+
+### 5. Limita risorse container
+
+In `docker-compose.yml`:
+
+```yaml
+services:
+  wildfly:
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '1.0'
+          memory: 1G
+```
+
+### 6. Logging configurabile
+
+Aggiungi in `docker-compose.yml`:
+
+```yaml
+services:
+  wildfly:
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+```
+
+### 7. Health checks
+
+Aggiungi in `docker-compose.yml`:
+
+```yaml
+services:
+  wildfly:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+```
+
+### 8. Script di setup automatico
+
+Crea uno script `setup.sh`:
+
+```bash
+#!/bin/bash
+set -e
+
+echo "🔧 Setup ambiente Docker per il progetto..."
+
+# Chiedi nome progetto
+read -p "Nome progetto: " PROJECT_NAME
+
+# Aggiorna docker-compose.yml
+sed -i "s/wildfly-dev/${PROJECT_NAME}-dev/g" docker-compose.yml
+
+# Chiedi file EAR
+read -p "Path del file EAR: " EAR_PATH
+cp "$EAR_PATH" ear/
+
+# Build e start
+echo "🚀 Costruisco l'immagine..."
+docker-compose build
+
+echo "✅ Setup completato! Avvia con: docker-compose up -d"
+```
+
+Usa con:
+```bash
+chmod +x setup.sh
+./setup.sh
+```
+
+---
+
+## Troubleshooting Customizzazioni
+
+### Errore: Module not found
+
+Verifica che il path del modulo in `module.xml` corrisponda alla struttura delle directory:
+
+```
+modules/org/postgresql/main/module.xml  → name="org.postgresql"
+modules/com/mycompany/main/module.xml   → name="com.mycompany"
+```
+
+### Errore: Datasource non disponibile
+
+1. Verifica che il driver sia configurato in `standalone.xml`
+2. Controlla i log: `docker-compose logs -f | grep -i datasource`
+3. Verifica che il modulo JDBC sia caricato correttamente
+
+### Porta già in uso
+
+```bash
+# Trova il processo che usa la porta
+sudo netstat -tulpn | grep 8080
+
+# Oppure cambia porta in docker-compose.yml
+ports:
+  - "8081:8080"
+```
+
+### Container non parte dopo modifiche
+
+```bash
+# Rebuilda senza cache
 docker-compose down
 docker-compose build --no-cache
 docker-compose up -d
@@ -337,39 +550,117 @@ docker-compose up -d
 
 ---
 
-## Struttura delle Cartelle nel Container
+## Checklist per Nuovo Progetto
 
-```
-/opt/wildfly/
-├── standalone/
-│   ├── deployments/           # EAR deployato qui
-│   │   └── IscrizioneAziendaPubblicaWeb.ear
-│   ├── configuration/         # Configurazioni WildFly
-│   │   └── standalone.xml
-│   └── log/                   # Log dell'applicazione
-├── modules/
-│   ├── IscrizioneAziendaPubblicaWeb/  # Configurazioni app
-│   │   └── config.properties
-│   └── inps/passi/main/               # Modulo custom
-│       ├── passi.jar
-│       └── module.xml
-└── truststore/
-    └── truststore.jks         # Certificati SSL
-```
+- [ ] Copiata struttura `docker-configuration/`
+- [ ] Sostituito file EAR in `ear/`
+- [ ] Aggiornato `Dockerfile` con nome EAR corretto (riga 39)
+- [ ] Modificato `config/config.properties` con configurazioni progetto
+- [ ] Aggiornato `docker-compose.yml` con nomi container/network univoci
+- [ ] Modificato `README.md` con riferimenti al nuovo progetto
+- [ ] Verificate porte (8080, 9990) per evitare conflitti
+- [ ] Aggiunti moduli custom se necessari
+- [ ] Configurati datasources in `standalone.xml` se necessario
+- [ ] Testato build: `docker-compose build`
+- [ ] Testato avvio: `docker-compose up -d`
+- [ ] Verificato accesso: http://localhost:8080
+- [ ] Controllati i log: `docker-compose logs -f`
 
 ---
 
-## Informazioni Utili
+## Risorse Utili
 
-- **Java Version**: 11 (OpenJDK)
-- **WildFly Version**: 23.0.2.Final
-- **Container Name**: wildfly-dev
-- **Porta HTTP**: 8080
-- **Porta Amministrazione**: 9990
-- **Porta HTTPS**: 8443
+- **WildFly Downloads**: https://www.wildfly.org/downloads/
+- **WildFly Documentation**: https://docs.wildfly.org/
+- **Docker Compose Reference**: https://docs.docker.com/compose/compose-file/
+- **Podman Documentation**: https://docs.podman.io/
+- **Eclipse Temurin (Java)**: https://adoptium.net/
 
 ---
 
 ## Supporto
 
-Per problemi o domande, contatta il team di sviluppo backend.
+Per domande o problemi con questa configurazione, contatta il team DevOps o consulta il README.md per istruzioni operative.
+
+---
+
+## Comandi per Avviare l'Ambiente
+
+### 1. Navigare alla directory del progetto
+
+```bash
+cd /home/masanson/projects/podman-inps-configuration
+```
+
+### 2. Costruire l'immagine Docker/Podman
+
+```bash
+docker-compose build
+```
+
+oppure con Podman:
+
+```bash
+podman-compose build
+```
+
+### 3. Avviare i container
+
+```bash
+docker-compose up -d
+```
+
+oppure con Podman:
+
+```bash
+podman-compose up -d
+```
+
+### 4. Verificare che il container sia attivo
+
+```bash
+docker-compose ps
+```
+
+oppure:
+
+```bash
+podman ps
+```
+
+### 5. Visualizzare i log del container
+
+```bash
+docker-compose logs -f
+```
+
+oppure:
+
+```bash
+podman logs -f wildfly-dev
+```
+
+### 6. Accedere all'applicazione
+
+- **Applicazione Web**: http://localhost:8080
+- **Console Amministrazione WildFly**: http://localhost:9990
+
+### 7. Fermare l'ambiente
+
+```bash
+docker-compose down
+```
+
+oppure:
+
+```bash
+podman-compose down
+```
+
+### 8. Ricostruire dopo modifiche
+
+```bash
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
